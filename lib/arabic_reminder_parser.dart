@@ -5,7 +5,6 @@ class ParsedReminder {
 
   /// true إذا لم يُذكر وقت واضح فافترضنا الساعة 9 صباحاً
   final bool timeAssumed;
-
   const ParsedReminder({
     required this.task,
     required this.dateTime,
@@ -20,16 +19,28 @@ class ArabicReminderParser {
   static RegExp _w(String p) => RegExp('(?<![ء-ي])(?:$p)(?![ء-ي])');
 
   static const Map<String, int> _hours = {
-    'الحاديه عشره': 11, 'الحاديه عشر': 11,
-    'الثانيه عشره': 12, 'الثانيه عشر': 12,
-    'الواحده': 1, 'واحده': 1, 'الاولي': 1,
-    'الثانيه': 2, 'الثالثه': 3, 'الرابعه': 4, 'الخامسه': 5,
-    'السادسه': 6, 'السابعه': 7, 'الثامنه': 8, 'التاسعه': 9, 'العاشره': 10,
+    'الحاديه عشره': 11,
+    'الحاديه عشر': 11,
+    'الثانيه عشره': 12,
+    'الثانيه عشر': 12,
+    'الواحده': 1,
+    'واحده': 1,
+    'الاولي': 1,
+    'الثانيه': 2,
+    'الثالثه': 3,
+    'الرابعه': 4,
+    'الخامسه': 5,
+    'السادسه': 6,
+    'السابعه': 7,
+    'الثامنه': 8,
+    'التاسعه': 9,
+    'العاشره': 10,
   };
 
   static final String _hourWords =
-      (_hours.keys.toList()..sort((a, b) => b.length.compareTo(a.length)))
-          .join('|');
+      (_hours.keys.toList()..sort((a, b) => b.length.compareTo(a.length))).join(
+        '|',
+      );
 
   static const Map<String, int> _weekdays = {
     'الاثنين': DateTime.monday,
@@ -64,8 +75,21 @@ class ArabicReminderParser {
 
   // ---------- تصحيح تقريبي مقيَّد بالسياق ----------
   static const _units = [
-    'ساعتين', 'دقيقتين', 'يومين', 'اسبوعين', 'ساعات', 'ساعه', 'دقائق',
-    'دقايق', 'دقيقه', 'ايام', 'يوم', 'اسبوع', 'اسابيع', 'ثواني', 'ثانيه',
+    'ساعتين',
+    'دقيقتين',
+    'يومين',
+    'اسبوعين',
+    'ساعات',
+    'ساعه',
+    'دقائق',
+    'دقايق',
+    'دقيقه',
+    'ايام',
+    'يوم',
+    'اسبوع',
+    'اسابيع',
+    'ثواني',
+    'ثانيه',
   ];
   static const _longDays = ['الاثنين', 'الثلاثاء', 'الاربعاء'];
 
@@ -76,8 +100,11 @@ class ArabicReminderParser {
       cur[0] = i;
       for (var j = 1; j <= b.length; j++) {
         final cost = a[i - 1] == b[j - 1] ? 0 : 1;
-        final v = [prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost]
-            .reduce((x, y) => x < y ? x : y);
+        final v = [
+          prev[j] + 1,
+          cur[j - 1] + 1,
+          prev[j - 1] + cost,
+        ].reduce((x, y) => x < y ? x : y);
         cur[j] = v;
       }
       prev = cur;
@@ -142,8 +169,14 @@ class ArabicReminderParser {
 
   static int _wordNumber(String w) {
     const m = {
-      'ثلاث': 3, 'اربع': 4, 'خمس': 5, 'ست': 6,
-      'سبع': 7, 'ثمان': 8, 'تسع': 9, 'عشر': 10,
+      'ثلاث': 3,
+      'اربع': 4,
+      'خمس': 5,
+      'ست': 6,
+      'سبع': 7,
+      'ثمان': 8,
+      'تسع': 9,
+      'عشر': 10,
     };
     for (final e in m.entries) {
       if (w.startsWith(e.key)) return e.value;
@@ -190,7 +223,11 @@ class ArabicReminderParser {
 
     ParsedReminder build(DateTime? dt, {bool assumed = false}) {
       // نحذف أوامر مثل "ذكرني"
-      take(_w(r'[ذد]كرني|[ذد]كريني|نبهني|نبهيني|لا\s+تنسى|لا\s+تنسي|اريد\s+ان|اريد'));
+      take(
+        _w(
+          r'[ذد]كرني|[ذد]كريني|نبهني|نبهيني|لا\s+تنسى|لا\s+تنسي|اريد\s+ان|اريد',
+        ),
+      );
       final buf = StringBuffer();
       for (var i = 0; i < clean.length; i++) {
         buf.write(remove[i] ? ' ' : clean[i]);
@@ -209,11 +246,13 @@ class ArabicReminderParser {
     }
 
     // 1) مدة نسبية: بعد ساعتين / بعد 10 دقائق / بعد ثلاث ساعات / بعد نصف ساعة
-    final rel = take(_w(
-      r'بعد\s+(?:(\d+|(?:ثلاث|اربع|خمس|ست|سبع|ثمان|تسع|عشر)[هي]{0,2})\s+)?'
-      r'(ساعتين|دقيقتين|يومين|اسبوعين|نصف\s+ساعه|ساعات|ساعه|ساع|دقائق|دقايق|دقيقه|دقيق|'
-      r'ايام|يوم|ثواني|ثانيه|اسابيع|اسبوع)(?:\s+واحد[هة]?)?',
-    ));
+    final rel = take(
+      _w(
+        r'بعد\s+(?:(\d+|(?:ثلاث|اربع|خمس|ست|سبع|ثمان|تسع|عشر)[هي]{0,2})\s+)?'
+        r'(ساعتين|دقيقتين|يومين|اسبوعين|نصف\s+ساعه|ساعات|ساعه|ساع|دقائق|دقايق|دقيقه|دقيق|'
+        r'ايام|يوم|ثواني|ثانيه|اسابيع|اسبوع)(?:\s+واحد[هة]?)?',
+      ),
+    );
     if (rel != null) {
       final numText = rel.group(1);
       final unit = rel.group(2)!.replaceAll(RegExp(r'\s+'), ' ');
@@ -250,7 +289,8 @@ class ArabicReminderParser {
     var day = todayDate;
     var hasDay = false, isToday = false, explicitWeekday = false, night = false;
 
-    DateTime plus(int k) => DateTime(todayDate.year, todayDate.month, todayDate.day + k);
+    DateTime plus(int k) =>
+        DateTime(todayDate.year, todayDate.month, todayDate.day + k);
 
     if (take(_w(r'بعد\s+(?:بكره|غدا|غد)')) != null) {
       day = plus(2);
@@ -266,10 +306,12 @@ class ArabicReminderParser {
       hasDay = true;
       night = true;
     } else {
-      final wm = take(_w(
-        r'(?:يوم\s+)?(الاثنين|الثلاثاء|الاربعاء|الخميس|الجمعه|السبت|الاحد)'
-        r'(?:\s+(?:الجاي|الجايه|القادم|القادمه))?',
-      ));
+      final wm = take(
+        _w(
+          r'(?:يوم\s+)?(الاثنين|الثلاثاء|الاربعاء|الخميس|الجمعه|السبت|الاحد)'
+          r'(?:\s+(?:الجاي|الجايه|القادم|القادمه))?',
+        ),
+      );
       if (wm != null) {
         final wd = _weekdays[wm.group(1)!]!;
         day = plus((wd - ref.weekday + 7) % 7);
@@ -316,9 +358,17 @@ class ArabicReminderParser {
     // الفترة (صباحاً/مساءً...) بالقرب من الساعة فقط
     final lo = tm!.start - 14 < 0 ? 0 : tm.start - 14;
     final hi = tm.end + 14 > n.length ? n.length : tm.end + 14;
-    final pmM = take(_w('(?:ال)?(?:مساء|مساءا|عصرا|عصر|ظهرا|ظهر|مغرب|عشاء)'), from: lo, to: hi);
+    final pmM = take(
+      _w('(?:ال)?(?:مساء|مساءا|عصرا|عصر|ظهرا|ظهر|مغرب|عشاء)'),
+      from: lo,
+      to: hi,
+    );
     final niM = take(_w('(?:ال)?(?:ليلا|ليل)'), from: lo, to: hi);
-    final amM = take(_w('(?:ال)?(?:صباحا|صباح|صبح|فجرا|فجر)'), from: lo, to: hi);
+    final amM = take(
+      _w('(?:ال)?(?:صباحا|صباح|صبح|فجرا|فجر)'),
+      from: lo,
+      to: hi,
+    );
     if (niM != null) night = true;
 
     int hh;
@@ -354,5 +404,33 @@ class ArabicReminderParser {
       }
     }
     return build(result);
+  }
+
+  List<ParsedReminder> parseMultiple(String input, {DateTime? now}) {
+    final parts = input
+        .split(
+          RegExp(
+            r'[،,؛;\n]+|\s+(?:ثم|وبعدها|بعدها|وبعدين)\s+|\s+و(?=(?:اتصل|أتصل|اراجع|أراجع|راجع|اشرب|أشرب|اذهب|أذهب|اروح|أروح|اشتري|أشتري|اقرأ|أقرأ|ادرس|أدرس|ارسل|أرسل|احضر|أحضر|اتناول|أتناول|تناول|قابل|أقابل|زور|أزور)(?:\s|$))',
+          ),
+        )
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) {
+      return [];
+    }
+
+    final results = <ParsedReminder>[];
+
+    for (final part in parts) {
+      final cleaned = part.replaceFirst(RegExp(r'^و(?=[ء-ي])'), '').trim();
+
+      if (cleaned.isEmpty) continue;
+
+      results.add(parse(cleaned, now: now));
+    }
+
+    return results;
   }
 }

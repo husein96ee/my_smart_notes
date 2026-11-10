@@ -31,8 +31,7 @@ const _ink = Color(0xFF26372E);
 const _muted = Color(0xFF899187);
 const _line = Color(0xFFE5E0D4);
 
-final GlobalKey<NavigatorState> navigatorKey =
-    GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 enum _Engine { google, offline }
 
@@ -90,9 +89,7 @@ class SmartNotesApp extends StatelessWidget {
             borderSide: BorderSide.none,
           ),
         ),
-        dialogTheme: const DialogThemeData(
-          backgroundColor: _paperCard,
-        ),
+        dialogTheme: const DialogThemeData(backgroundColor: _paperCard),
       ),
       home: const HomePage(),
     );
@@ -119,11 +116,9 @@ class _HomePageState extends State<HomePage> {
   final NotificationService _notifications = NotificationService();
   final NotesStore _store = NotesStore();
 
-  final TextEditingController _textController =
-      TextEditingController();
+  final TextEditingController _textController = TextEditingController();
 
-  final TextEditingController _searchController =
-      TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
   List<NoteItem> _notes = [];
 
@@ -178,11 +173,8 @@ class _HomePageState extends State<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       navigatorKey.currentState?.push(
         MaterialPageRoute(
-          builder: (_) => AlarmPage(
-            id: id,
-            task: task,
-            service: _notifications,
-          ),
+          builder: (_) =>
+              AlarmPage(id: id, task: task, service: _notifications),
         ),
       );
     });
@@ -241,20 +233,22 @@ class _HomePageState extends State<HomePage> {
     try {
       var lastShown = -1;
 
-      await _speech.downloadModel(onProgress: (p, f) {
-        final pct = (p * 100).floor();
+      await _speech.downloadModel(
+        onProgress: (p, f) {
+          final pct = (p * 100).floor();
 
-        if (pct == lastShown) return;
+          if (pct == lastShown) return;
 
-        lastShown = pct;
+          lastShown = pct;
 
-        if (mounted) {
-          setState(() {
-            _dlProgress = p;
-            _dlFile = f;
-          });
-        }
-      });
+          if (mounted) {
+            setState(() {
+              _dlProgress = p;
+              _dlFile = f;
+            });
+          }
+        },
+      );
 
       await _checkModel();
 
@@ -289,8 +283,7 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isBusy = true);
 
     try {
-      final online =
-          _useInternet && !_skipOnlineOnce && await _hasInternet();
+      final online = _useInternet && !_skipOnlineOnce && await _hasInternet();
 
       _skipOnlineOnce = false;
 
@@ -474,9 +467,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _startOffline() async {
     if (!_modelReady) {
-      _showMessage(
-        'نزّل نموذج الصوت أولاً لتستخدم الوضع بدون إنترنت',
-      );
+      _showMessage('نزّل نموذج الصوت أولاً لتستخدم الوضع بدون إنترنت');
       return;
     }
 
@@ -568,10 +559,7 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      await _createNote(
-        confirmed.trim(),
-        audioPath: path,
-      );
+      await _createNote(confirmed.trim(), audioPath: path);
     } catch (e, st) {
       debugPrint('PROCESS ERROR: $e');
       debugPrintStack(stackTrace: st);
@@ -594,98 +582,120 @@ class _HomePageState extends State<HomePage> {
     return showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ConfirmTextDialog(
-        heard: heard,
-        parser: _parser,
-      ),
+      builder: (_) => _ConfirmTextDialog(heard: heard, parser: _parser),
     );
   }
 
   // ---------- إنشاء مذكرة وضبط موعدها ----------
 
-  Future<void> _createNote(
-    String text, {
-    String audioPath = '',
-  }) async {
-    final reminder = _parser.parse(text);
-    final due = reminder.dateTime;
+  Future<void> _createNote(String text, {String audioPath = ''}) async {
+    final reminders = _parser.parseMultiple(text);
 
-    final id = DateTime.now()
-        .millisecondsSinceEpoch
-        .remainder(2147483647);
-
-    var scheduled = false;
-    var level = 0;
-    String? error;
-
-    if (due != null) {
-      try {
-        await _notifications.initialize();
-
-        level = await _notifications.scheduleReminder(
-          id: id,
-          task: reminder.task,
-          dateTime: due,
-        );
-
-        scheduled = true;
-      } catch (e) {
-        error = '$e';
-      }
+    if (reminders.isEmpty) {
+      _showMessage('لم أتمكن من استخراج أي مهمة');
+      return;
     }
 
-    final note = NoteItem(
-      id: id,
-      text: text,
-      task: reminder.task,
-      dueMs: due?.millisecondsSinceEpoch,
-      scheduled: scheduled,
-      audioPath: audioPath,
-      createdMs: DateTime.now().millisecondsSinceEpoch,
-    );
+    final usedIds = _notes.map((note) => note.id).toSet();
+    final newNotes = <NoteItem>[];
 
-    _notes.insert(0, note);
+    var scheduledCount = 0;
+    var failedCount = 0;
+    var assumedCount = 0;
+    var noDateCount = 0;
 
-    if (mounted) setState(() {});
+    String? firstError;
+    String? firstWarning;
+
+    for (var i = 0; i < reminders.length; i++) {
+      final reminder = reminders[i];
+      final due = reminder.dateTime;
+
+      var id = DateTime.now().microsecondsSinceEpoch.remainder(2147483647);
+
+      while (usedIds.contains(id)) {
+        id = (id + 1).remainder(2147483647);
+      }
+      usedIds.add(id);
+
+      var scheduled = false;
+
+      if (due != null) {
+        try {
+          await _notifications.initialize();
+
+          final level = await _notifications.scheduleReminder(
+            id: id,
+            task: reminder.task,
+            dateTime: due,
+          );
+
+          scheduled = true;
+          scheduledCount++;
+
+          if (level > 0 && firstWarning == null) {
+            firstWarning = _notifications.lastWarning;
+          }
+        } catch (e) {
+          failedCount++;
+          firstError ??= '$e';
+        }
+      } else {
+        noDateCount++;
+      }
+
+      if (reminder.timeAssumed) {
+        assumedCount++;
+      }
+
+      final note = NoteItem(
+        id: id,
+        text: reminder.originalText,
+        task: reminder.task,
+        dueMs: due?.millisecondsSinceEpoch,
+        scheduled: scheduled,
+        audioPath: i == 0 ? audioPath : '',
+        createdMs: DateTime.now().millisecondsSinceEpoch,
+      );
+
+      newNotes.insert(0, note);
+    }
+
+    _notes.insertAll(0, newNotes);
+
+    if (mounted) {
+      setState(() {});
+    }
 
     try {
       await _store.save(_notes);
     } catch (e) {
       debugPrint('SAVE NOTE ERROR: $e');
-      _showMessage('ظهرت المذكرة لكن تعذّر حفظها: $e');
+      _showMessage('تعذّر حفظ الملاحظات: $e');
+      return;
     }
 
     if (!mounted) return;
 
-    if (scheduled) {
-      final extra = reminder.timeAssumed
-          ? ' (افترضتُ الساعة 9 صباحاً)'
-          : '';
+    _showMessage(
+      'تم حفظ ${newNotes.length} مهام، '
+      'وضبط $scheduledCount تنبيهات',
+    );
 
-      final mode = level == 0
-          ? ''
-          : (level == 1
-              ? ' - بنغمة النظام'
-              : ' - كتنبيه عادي (وضع احتياطي)');
+    if (noDateCount > 0) {
+      _showMessage('$noDateCount مهام حُفظت دون موعد');
+    }
 
+    if (failedCount > 0) {
+      await _showError('تعذّر ضبط $failedCount تنبيهات', firstError ?? '');
+    } else if (firstWarning != null) {
+      await _showError('بعض التنبيهات تعمل بوضع احتياطي', firstWarning);
+    }
+
+    if (assumedCount > 0 && mounted) {
       _showMessage(
-        'تم ضبط التنبيه: ${formatDue(due!)}$extra$mode',
-      );
-
-      if (level > 0) {
-        await _showError(
-          'ضُبط التنبيه بوضع احتياطي',
-          _notifications.lastWarning,
-        );
-      }
-    } else if (due == null) {
-      _showMessage('حُفظت المذكرة بدون موعد');
-    } else {
-      _showMessage('حُفظت المذكرة لكن تعذّر ضبط التنبيه');
-
-      await _showError(
-        'تعذّر ضبط التنبيه',
-        error ?? '',
+        'تم افتراض موعد الساعة 9 صباحاً '
+        'لـ $assumedCount مهام',
       );
     }
   }
@@ -735,10 +745,7 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _paperCard,
-        title: const Text(
-          'حذف المذكرة؟',
-          style: TextStyle(color: _ink),
-        ),
+        title: const Text('حذف المذكرة؟', style: TextStyle(color: _ink)),
         content: const Text(
           'سيتم حذف المذكرة والتسجيل الصوتي المرتبط بها.',
           style: TextStyle(color: _ink),
@@ -749,9 +756,7 @@ class _HomePageState extends State<HomePage> {
             child: const Text('إلغاء'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('حذف'),
           ),
@@ -788,10 +793,7 @@ class _HomePageState extends State<HomePage> {
 
   // ---------- رسائل الأخطاء ----------
 
-  Future<void> _showError(
-    String title,
-    String details,
-  ) async {
+  Future<void> _showError(String title, String details) async {
     if (!mounted) return;
 
     await showDialog<void>(
@@ -800,15 +802,9 @@ class _HomePageState extends State<HomePage> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: _paperCard,
-          title: Text(
-            title,
-            style: const TextStyle(color: _ink),
-          ),
+          title: Text(title, style: const TextStyle(color: _ink)),
           content: SingleChildScrollView(
-            child: SelectableText(
-              details,
-              style: const TextStyle(color: _ink),
-            ),
+            child: SelectableText(details, style: const TextStyle(color: _ink)),
           ),
           actions: [
             TextButton(
@@ -828,10 +824,7 @@ class _HomePageState extends State<HomePage> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(
-            message,
-            textDirection: TextDirection.rtl,
-          ),
+          content: Text(message, textDirection: TextDirection.rtl),
           backgroundColor: _greenDark,
           behavior: SnackBarBehavior.floating,
         ),
@@ -859,9 +852,7 @@ class _HomePageState extends State<HomePage> {
 
     if (_isRecording) {
       if (_engine == _Engine.google) {
-        return _liveText.isEmpty
-            ? 'أسمعك عبر الإنترنت...'
-            : _liveText;
+        return _liveText.isEmpty ? 'أسمعك عبر الإنترنت...' : _liveText;
       }
 
       return 'أسمعك بدون إنترنت... اضغط إيقاف عند الانتهاء';
@@ -923,130 +914,123 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(17),
         child: IntrinsicHeight(
           child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              width: 5,
-              color: n.isDone ? _green : const Color(0xFFB6C9AC),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 14, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.menu_book_rounded,
-                          color: _green,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 7),
-                        const Text(
-                          'مذكرتي',
-                          style: TextStyle(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 5,
+                color: n.isDone ? _green : const Color(0xFFB6C9AC),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 14, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.menu_book_rounded,
                             color: _green,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                            size: 20,
                           ),
-                        ),
-                        const Spacer(),
-                        if (n.audioPath.isNotEmpty)
+                          const SizedBox(width: 7),
+                          const Text(
+                            'مذكرتي',
+                            style: TextStyle(
+                              color: _green,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (n.audioPath.isNotEmpty)
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: 'تشغيل التسجيل',
+                              onPressed: () => _play(n),
+                              icon: const Icon(
+                                Icons.play_circle_fill,
+                                color: _blue,
+                                size: 25,
+                              ),
+                            ),
                           IconButton(
                             visualDensity: VisualDensity.compact,
-                            tooltip: 'تشغيل التسجيل',
-                            onPressed: () => _play(n),
+                            tooltip: 'حذف',
+                            onPressed: () => _delete(n),
                             icon: const Icon(
-                              Icons.play_circle_fill,
-                              color: _blue,
-                              size: 25,
+                              Icons.delete_outline,
+                              color: Colors.redAccent,
+                              size: 22,
                             ),
                           ),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          tooltip: 'حذف',
-                          onPressed: () => _delete(n),
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.redAccent,
-                            size: 22,
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              n.task.isEmpty ? n.text : n.task,
+                              style: GoogleFonts.arefRuqaa(
+                                fontSize: 27,
+                                height: 1.65,
+                                color: n.isDone ? _muted : _ink,
+                                decoration: n.isDone
+                                    ? TextDecoration.lineThrough
+                                    : TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Checkbox(
+                            value: n.isDone,
+                            activeColor: _green,
+                            side: const BorderSide(color: _green, width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            onChanged: (_) => _toggleDone(n),
+                          ),
+                        ],
+                      ),
+                      if (n.text != n.task) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          'النص الأصلي: ${n.text}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: _muted,
+                            height: 1.5,
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 7),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            n.task.isEmpty ? n.text : n.task,
-                            style: GoogleFonts.arefRuqaa(
-                              fontSize: 27,
-                              height: 1.65,
-                              color: n.isDone ? _muted : _ink,
-                              decoration: n.isDone
-                                  ? TextDecoration.lineThrough
-                                  : TextDecoration.none,
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Divider(color: _line, height: 1),
+                      ),
+                      Row(
+                        children: [
+                          Icon(badgeIcon, color: badgeColor, size: 17),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              badge,
+                              style: TextStyle(
+                                color: badgeColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Checkbox(
-                          value: n.isDone,
-                          activeColor: _green,
-                          side: const BorderSide(
-                            color: _green,
-                            width: 1.5,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(5),
-                          ),
-                          onChanged: (_) => _toggleDone(n),
-                        ),
-                      ],
-                    ),
-                    if (n.text != n.task) ...[
-                      const SizedBox(height: 5),
-                      Text(
-                        'النص الأصلي: ${n.text}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: _muted,
-                          height: 1.5,
-                        ),
+                        ],
                       ),
                     ],
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      child: Divider(color: _line, height: 1),
-                    ),
-                    Row(
-                      children: [
-                        Icon(
-                          badgeIcon,
-                          color: badgeColor,
-                          size: 17,
-                        ),
-                        const SizedBox(width: 7),
-                        Expanded(
-                          child: Text(
-                            badge,
-                            style: TextStyle(
-                              color: badgeColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
           ),
         ),
       ),
@@ -1107,12 +1091,9 @@ class _HomePageState extends State<HomePage> {
             total == 0
                 ? 'ابدأ بكتابة أول مهمة لك'
                 : completed == total
-                    ? 'أحسنت! أكملت جميع مهامك'
-                    : 'استمر، أنت تتقدم بشكل رائع',
-            style: const TextStyle(
-              color: _greenDark,
-              fontSize: 12,
-            ),
+                ? 'أحسنت! أكملت جميع مهامك'
+                : 'استمر، أنت تتقدم بشكل رائع',
+            style: const TextStyle(color: _greenDark, fontSize: 12),
           ),
         ],
       ),
@@ -1163,13 +1144,12 @@ class _HomePageState extends State<HomePage> {
               height: 116,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _isRecording
-                    ? const Color(0xFFE9B9B4)
-                    : _blue,
+                color: _isRecording ? const Color(0xFFE9B9B4) : _blue,
                 boxShadow: [
                   BoxShadow(
-                    color: (_isRecording ? Colors.red : _blue)
-                        .withValues(alpha: 0.18),
+                    color: (_isRecording ? Colors.red : _blue).withValues(
+                      alpha: 0.18,
+                    ),
                     blurRadius: 20,
                     spreadRadius: 5,
                   ),
@@ -1186,11 +1166,7 @@ class _HomePageState extends State<HomePage> {
           Text(
             _cardMessage(),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _muted,
-              fontSize: 13,
-              height: 1.7,
-            ),
+            style: const TextStyle(color: _muted, fontSize: 13, height: 1.7),
           ),
           const SizedBox(height: 19),
           SizedBox(
@@ -1199,17 +1175,11 @@ class _HomePageState extends State<HomePage> {
               onPressed: _isBusy
                   ? null
                   : (_isRecording ? _stopRecording : _startRecording),
-              icon: Icon(
-                _isRecording
-                    ? Icons.stop_circle_outlined
-                    : Icons.mic,
-              ),
+              icon: Icon(_isRecording ? Icons.stop_circle_outlined : Icons.mic),
               label: Text(
                 _isBusy
                     ? 'يرجى الانتظار...'
-                    : (_isRecording
-                        ? 'إيقاف وحفظ'
-                        : 'ابدأ تسجيل مذكرتك'),
+                    : (_isRecording ? 'إيقاف وحفظ' : 'ابدأ تسجيل مذكرتك'),
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: _green,
@@ -1282,10 +1252,7 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: Text(
                   'نموذج الصوت بدون إنترنت',
-                  style: TextStyle(
-                    color: _ink,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(color: _ink, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -1348,11 +1315,7 @@ class _HomePageState extends State<HomePage> {
           ),
           IconButton(
             onPressed: _addFromText,
-            icon: const Icon(
-              Icons.add_circle,
-              color: _green,
-              size: 32,
-            ),
+            icon: const Icon(Icons.add_circle, color: _green, size: 32),
           ),
         ],
       ),
@@ -1477,11 +1440,7 @@ class _HomePageState extends State<HomePage> {
 
         Row(
           children: [
-            const Icon(
-              Icons.menu_book_rounded,
-              color: _green,
-              size: 25,
-            ),
+            const Icon(Icons.menu_book_rounded, color: _green, size: 25),
             const SizedBox(width: 8),
             const Text(
               'دفتر مذكراتي',
@@ -1563,9 +1522,7 @@ class _HomePageState extends State<HomePage> {
           .isAfter(DateTime.now());
     }).length;
 
-    final itemCount = filteredNotes.isEmpty
-        ? 2
-        : filteredNotes.length + 2;
+    final itemCount = filteredNotes.isEmpty ? 2 : filteredNotes.length + 2;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -1613,10 +1570,7 @@ class _HomePageState extends State<HomePage> {
               onPressed: () {
                 _showMessage('مرحباً بك في مذكرتي الذكية');
               },
-              icon: const Icon(
-                Icons.info_outline,
-                color: _greenDark,
-              ),
+              icon: const Icon(Icons.info_outline, color: _greenDark),
             ),
           ],
         ),
@@ -1639,10 +1593,7 @@ class _HomePageState extends State<HomePage> {
               if (index <= filteredNotes.length) {
                 final noteIndex = index - 1;
 
-                return _noteCard(
-                  filteredNotes[noteIndex],
-                  noteIndex,
-                );
+                return _noteCard(filteredNotes[noteIndex], noteIndex);
               }
 
               // تذييل الصفحة
@@ -1695,14 +1646,10 @@ class _ConfirmTextDialog extends StatefulWidget {
   final String heard;
   final ArabicReminderParser parser;
 
-  const _ConfirmTextDialog({
-    required this.heard,
-    required this.parser,
-  });
+  const _ConfirmTextDialog({required this.heard, required this.parser});
 
   @override
-  State<_ConfirmTextDialog> createState() =>
-      _ConfirmTextDialogState();
+  State<_ConfirmTextDialog> createState() => _ConfirmTextDialogState();
 }
 
 class _ConfirmTextDialogState extends State<_ConfirmTextDialog> {
@@ -1722,52 +1669,98 @@ class _ConfirmTextDialogState extends State<_ConfirmTextDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final reminder = widget.parser.parse(_controller.text);
-
-    final preview = reminder.dateTime == null
-        ? 'بدون موعد'
-        : '⏰ ${formatDue(reminder.dateTime!)}'
-            '${reminder.timeAssumed ? ' (افتراضي)' : ''}';
+    final reminders = widget.parser.parseMultiple(_controller.text);
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: AlertDialog(
         backgroundColor: _paperCard,
         title: const Text(
-          'راجع النص قبل الحفظ',
+          'راجع المهام قبل الحفظ',
           style: TextStyle(color: _ink),
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _controller,
-                autofocus: true,
-                maxLines: null,
-                style: const TextStyle(color: _ink),
-                decoration: const InputDecoration(
-                  hintText: 'راجع النص أو عدّله هنا',
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  maxLines: null,
+                  style: const TextStyle(color: _ink),
+                  decoration: const InputDecoration(
+                    hintText: 'راجع النص أو عدّله هنا',
+                  ),
+                  onChanged: (_) {
+                    setState(() {});
+                  },
                 ),
-                onChanged: (_) {
-                  setState(() {});
-                },
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'المهمة: ${reminder.task}',
-                style: const TextStyle(color: _ink),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                preview,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: reminder.dateTime == null ? _muted : _green,
+                const SizedBox(height: 18),
+                Text(
+                  'المهام المستخرجة: ${reminders.length}',
+                  style: const TextStyle(
+                    color: _green,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+
+                if (reminders.isEmpty)
+                  const Text(
+                    'لم يتم استخراج مهام',
+                    style: TextStyle(color: _muted),
+                  ),
+
+                ...List.generate(reminders.length, (index) {
+                  final reminder = reminders[index];
+
+                  final preview = reminder.dateTime == null
+                      ? 'بدون موعد'
+                      : 'موعد التنبيه: ${formatDue(reminder.dateTime!)}'
+                            '${reminder.timeAssumed ? ' (موعد افتراضي)' : ''}';
+
+                  return Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _paper,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _green.withValues(alpha: 0.25)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'المهمة ${index + 1}',
+                          style: const TextStyle(
+                            color: _green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          reminder.task,
+                          style: const TextStyle(color: _ink, fontSize: 15),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          preview,
+                          style: TextStyle(
+                            color: reminder.dateTime == null ? _muted : _green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -1777,10 +1770,12 @@ class _ConfirmTextDialogState extends State<_ConfirmTextDialog> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: _green),
-            onPressed: () {
-              Navigator.pop(context, _controller.text);
-            },
-            child: const Text('حفظ'),
+            onPressed: reminders.isEmpty
+                ? null
+                : () {
+                    Navigator.pop(context, _controller.text);
+                  },
+            child: const Text('حفظ جميع المهام'),
           ),
         ],
       ),
@@ -1828,9 +1823,7 @@ class _AlarmPageState extends State<AlarmPage> {
       setState(() => _busy = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تعذر إيقاف التنبيه. حاول مرة أخرى'),
-        ),
+        const SnackBar(content: Text('تعذر إيقاف التنبيه. حاول مرة أخرى')),
       );
     }
   }
@@ -1843,10 +1836,7 @@ class _AlarmPageState extends State<AlarmPage> {
     setState(() => _busy = true);
 
     try {
-      await widget.service.snoozeNow(
-        widget.id,
-        widget.task,
-      );
+      await widget.service.snoozeNow(widget.id, widget.task);
 
       if (!mounted) return;
 
@@ -1886,11 +1876,7 @@ class _AlarmPageState extends State<AlarmPage> {
                     color: _greenLight,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.alarm,
-                    color: _greenDark,
-                    size: 75,
-                  ),
+                  child: const Icon(Icons.alarm, color: _greenDark, size: 75),
                 ),
                 const SizedBox(height: 25),
                 const Text(

@@ -41,7 +41,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        
+
+        <receiver
+    android:exported="false"
+    android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />
 <!-- تشغيل الإشعار في الموعد المجدول -->
 <receiver
     android:exported="false"
